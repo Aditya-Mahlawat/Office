@@ -5,12 +5,41 @@ import { createWorker } from "tesseract.js";
 import { DATA_DIR, ensureDataDirs } from "./paths";
 import type { DocumentExtract } from "./pdf-extract";
 
-/** OCR image-only PDF pages with Tesseract. Language data is cached under data/. */
-export async function ocrImagePdf(buffer: Buffer): Promise<string[]> {
+async function tryGeminiOcr(buffer: Buffer, apiKey: string): Promise<string[] | null> {
+  try {
+    const { GoogleGenAI } = await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          inlineData: {
+            mimeType: "application/pdf",
+            data: buffer.toString("base64"),
+          },
+        },
+        "Extract all text from this document verbatim. Preserve the complete text structure, including all headings, institute details, applicant information, tables, and signature blocks. Return only the extracted text.",
+      ],
+    });
+    const text = response.text?.trim();
+    if (text) return [text];
+    return null;
+  } catch (err) {
+    console.warn("Gemini OCR failed or unavailable, falling back to standalone Tesseract OCR:", err);
+    return null;
+  }
+}
+
+async function runStandaloneTesseract(buffer: Buffer): Promise<string[]> {
   ensureDataDirs();
   const doc = await getDocumentProxy(new Uint8Array(buffer));
+  const workerScript = path.resolve(process.cwd(), "node_modules/tesseract.js/src/worker-script/node/index.js");
   const worker = await createWorker("eng", 1, {
     cachePath: path.join(DATA_DIR, "ocr-cache"),
+    workerPath: workerScript,
+  });
+  await worker.setParameters({
+    user_defined_dpi: "300",
   });
 
   try {
@@ -25,13 +54,30 @@ export async function ocrImagePdf(buffer: Buffer): Promise<string[]> {
         continue;
       }
 
-      const image = await sharp(source.data, {
+      // Check if image is a full-page photo/scan with photographic borders
+      // Removing ~3% outer border prevents dark background shadows from corrupting edge characters
+      const hasMargin = source.width > 400 && source.height > 400;
+      const cropLeft = hasMargin ? Math.round(source.width * 0.03) : 0;
+      const cropTop = hasMargin ? Math.round(source.height * 0.03) : 0;
+      const cropWidth = source.width - cropLeft * 2;
+      const cropHeight = source.height - cropTop * 2;
+
+      let pipeline = sharp(source.data, {
         raw: { width: source.width, height: source.height, channels: source.channels },
-      })
+      });
+
+      if (hasMargin) {
+        pipeline = pipeline.extract({ left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight });
+      }
+
+      const image = await pipeline
+        .withMetadata({ density: 300 })
         .grayscale()
+        .clahe({ width: 40, height: 40 })
         .normalize()
         .png()
         .toBuffer();
+
       const result = await worker.recognize(image);
       texts.push(result.data.text.replace(/\s+/g, " ").trim());
     }
@@ -39,6 +85,20 @@ export async function ocrImagePdf(buffer: Buffer): Promise<string[]> {
   } finally {
     await worker.terminate();
   }
+}
+
+/** OCR image-only PDF pages with Gemini if API key is set, falling back to standalone Tesseract. */
+export async function ocrImagePdf(buffer: Buffer, apiKey?: string): Promise<{ texts: string[]; provider: "gemini" | "tesseract" }> {
+  const key = apiKey || process.env.GEMINI_API_KEY;
+  if (key) {
+    const geminiTexts = await tryGeminiOcr(buffer, key);
+    if (geminiTexts && geminiTexts.length > 0) {
+      return { texts: geminiTexts, provider: "gemini" };
+    }
+  }
+
+  const texts = await runStandaloneTesseract(buffer);
+  return { texts, provider: "tesseract" };
 }
 
 export function applyOcrText(extract: DocumentExtract, pageTexts: string[]): DocumentExtract {

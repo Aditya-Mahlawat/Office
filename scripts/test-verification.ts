@@ -20,8 +20,22 @@ async function main() {
   console.log("Category Scores:", JSON.stringify(result.categoryScores, null, 2));
   console.log("Issues:", JSON.stringify(result.issues, null, 2));
   console.log("Engine Note:", result.engineNote);
-  console.log("Used OCR:", result.extractedSummary.usedOcr);
-  console.log("Uploaded text preview:", result.extractedSummary.uploadedTextPreview);
+  const ref = await (await import("../lib/pdf-extract")).extractPdf(refBuf);
+  const ocrRes = await (await import("../lib/ocr")).ocrImagePdf(upBuf);
+  const up = (await import("../lib/ocr")).applyOcrText(
+    await (await import("../lib/pdf-extract")).extractPdf(upBuf),
+    ocrRes.texts
+  );
+  const { deriveReferenceCriteria } = await import("../lib/reference-criteria");
+  const crit = deriveReferenceCriteria(ref.fullText);
+  const { detectSections } = await import("../lib/pdf-extract");
+  const { sequenceSimilarity } = await import("../lib/similarity");
+  const refSec = detectSections(ref.fullText, crit.expectedSections);
+  const upSec = detectSections(up.fullText, crit.expectedSections);
+  console.log("crit.expectedSections:", crit.expectedSections);
+  console.log("refSec:", refSec);
+  console.log("upSec:", upSec);
+  console.log("sequenceSimilarity:", sequenceSimilarity(crit.expectedSections, upSec));
 }
 
 main().catch(console.error);

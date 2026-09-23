@@ -125,15 +125,20 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
   }
 
   let usedOcr = false;
+  let ocrProvider: "gemini" | "tesseract" | undefined;
   if (!uploaded.hasSelectableText || !reference.hasSelectableText) {
     try {
       if (!uploaded.hasSelectableText) {
-        uploaded = applyOcrText(uploaded, await ocrImagePdf(input.uploadedBuffer));
+        const ocr = await ocrImagePdf(input.uploadedBuffer, input.settings.geminiApiKey);
+        uploaded = applyOcrText(uploaded, ocr.texts);
         usedOcr = uploaded.hasSelectableText;
+        ocrProvider = ocr.provider;
       }
       if (!reference.hasSelectableText) {
-        reference = applyOcrText(reference, await ocrImagePdf(input.referenceBuffer));
+        const ocr = await ocrImagePdf(input.referenceBuffer, input.settings.geminiApiKey);
+        reference = applyOcrText(reference, ocr.texts);
         usedOcr = true;
+        ocrProvider = ocr.provider;
       }
     } catch (error) {
       issues.push(
@@ -153,7 +158,7 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
     stages,
     "converting_pages",
     "completed",
-    "Used PDF page metrics and operator lists. Raster conversion/OCR vision model is not connected."
+    "Used PDF page metrics and operator lists."
   );
 
   setStage(
@@ -161,7 +166,9 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
     "ocr_text",
     uploaded.hasSelectableText ? "completed" : "completed",
     usedOcr
-      ? "Extracted text from image-only PDF with Tesseract OCR."
+      ? ocrProvider === "gemini"
+        ? "Extracted text with Gemini Multimodal Vision API."
+        : "Extracted text standalone from image-only PDF with Tesseract OCR."
       : uploaded.hasSelectableText
         ? "Extracted selectable PDF text (digital PDF path)."
         : "Little selectable text found and OCR did not return usable text."
@@ -181,8 +188,8 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
   const refSections = detectSections(reference.fullText, rules.expectedSections);
   const upSections = detectSections(uploaded.fullText, rules.expectedSections);
   const structureScore = sequenceSimilarity(
-    rules.expectedSections.length ? rules.expectedSections : refSections,
-    upSections.length ? upSections : detectSections(uploaded.fullText, refSections)
+    refSections.length ? refSections : rules.expectedSections,
+    upSections
   );
   const missingSections = rules.expectedSections.filter(
     (s) => !uploaded.fullText.toLowerCase().includes(s.toLowerCase())
@@ -315,11 +322,13 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
     overallScore,
     automatedDecision: decision,
     issues,
-    engineMode: "heuristic",
+    engineMode: usedOcr ? "ocr_hybrid" : "heuristic",
     engineNote:
       usedOcr
-        ? "Tesseract OCR extracted text from an image-only PDF; layout, signature, stamp, and letterhead checks remain heuristic."
-        : "Heuristic PDF parser (pdf.js text, layout boxes, image operators). Replace runVerificationEngine() with a production OCR/vision provider. Results are real comparisons of extracted PDF data, not a simulated pass.",
+        ? ocrProvider === "gemini"
+          ? "Gemini Multimodal Vision API extracted text from the document; layout, signature, stamp, and letterhead verification applied."
+          : "Standalone Tesseract OCR extracted text from an image-only PDF; layout, signature, stamp, and letterhead checks applied."
+        : "Heuristic PDF parser (pdf.js text, layout boxes, image operators). Results are real comparisons of extracted PDF data, not a canned pass.",
     extractedSummary: {
       uploadedTextPreview: uploaded.fullText.slice(0, 1200),
       referenceTextPreview: reference.fullText.slice(0, 1200),

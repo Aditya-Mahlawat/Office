@@ -184,6 +184,30 @@ export default function SettingsPage() {
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>
+        <div className="card-h">Vision & OCR Provider</div>
+        <div className="card-b small">
+          <p>
+            When a scanned document (image-only PDF) is uploaded, the verification engine uses OCR to extract text, fields, and letterhead structure.
+          </p>
+          <div className="field" style={{ marginTop: 12 }}>
+            <label>Google Gemini API Key (optional):</label>
+            <input
+              type="password"
+              placeholder="AIzaSy... (leave blank to use standalone Tesseract OCR)"
+              value={settings.geminiApiKey || ""}
+              onChange={(e) => setSettings({ ...settings, geminiApiKey: e.target.value.trim() })}
+              style={{ width: "100%", maxWidth: 450 }}
+            />
+            <p className="muted" style={{ marginTop: 6 }}>
+              {settings.geminiApiKey
+                ? "✓ Gemini Multimodal Vision API is configured for cloud-powered document understanding."
+                : "ℹ No API key configured. Standalone local Tesseract + Sharp OCR engine is active (100% offline)."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
         <div className="card-h">External integration</div>
         <div className="card-b small">
           <p>

@@ -1,5 +1,5 @@
 import { extractText, extractTextItems, getDocumentProxy } from "unpdf";
-import { jaccard, tokenize } from "./similarity";
+import { coverage, jaccard, tokenize } from "./similarity";
 
 export type TextItemLayout = {
   text: string;
@@ -122,14 +122,28 @@ export function detectSections(text: string, expected: string[]): string[] {
   return Array.from(new Set([...found, ...headingLike.slice(0, 12)]));
 }
 
+const FIELD_SYNONYMS: Record<string, string[]> = {
+  phone: ["phone", "mobile", "mob", "tel", "telephone", "contact", "ph", "ph."],
+  date: ["date", "dated"],
+  dated: ["dated", "date"],
+  signature: ["signature", "sign", "signed", "signatory"],
+  address: ["address", "addr"],
+  designation: ["designation", "desig"],
+  institute: ["institute", "institution"],
+};
+
 export function fieldPresence(text: string, fields: string[]): { present: string[]; missing: string[] } {
   const present: string[] = [];
   const missing: string[] = [];
   const hay = text.toLowerCase();
   for (const field of fields) {
     const key = field.toLowerCase();
-    const variants = [key, `${key}:`, `${key} :`, key.replace(/\s+/g, "")];
-    if (variants.some((v) => hay.includes(v))) present.push(field);
+    const candidates = FIELD_SYNONYMS[key] ? [key, ...FIELD_SYNONYMS[key]] : [key];
+    const isPresent = candidates.some((cand) => {
+      const variants = [cand, `${cand}:`, `${cand} :`, cand.replace(/\s+/g, "")];
+      return variants.some((v) => hay.includes(v));
+    });
+    if (isPresent) present.push(field);
     else missing.push(field);
   }
   return { present, missing };
@@ -180,7 +194,10 @@ export function letterheadAnalysis(ref: DocumentExtract, uploaded: DocumentExtra
   const upTop = uploaded.topBandText;
   const refHasImage = (ref.pages[0]?.imageCount ?? 0) > 0;
   const upHasImage = (uploaded.pages[0]?.imageCount ?? 0) > 0;
-  const textScore = jaccard(tokenize(refTop), tokenize(upTop));
+  const textScore = Math.max(
+    jaccard(tokenize(refTop), tokenize(upTop)),
+    coverage(tokenize(refTop), upTop)
+  );
   let score = textScore;
   if (refHasImage && upHasImage) score = Math.max(score, 78);
   if (refHasImage && !upHasImage) score = Math.min(score, 55);
@@ -191,7 +208,7 @@ export function letterheadAnalysis(ref: DocumentExtract, uploaded: DocumentExtra
     reason:
       refHasImage && !upHasImage
         ? "Reference letterhead appears image-based; uploaded top band has no similar image object."
-        : `Top-of-page text similarity ${textScore}%.`,
+        : `Top-of-page text similarity ${score}%.`,
   };
 }
 
@@ -208,14 +225,17 @@ export function layoutScore(ref: DocumentExtract, uploaded: DocumentExtract): {
     );
   }
 
+  const hasUploadedTextItems = uploaded.pages.some((p) => p.items.length > 0);
   const n = Math.min(ref.pages.length, uploaded.pages.length);
   let marginDelta = 0;
   for (let i = 0; i < n; i += 1) {
     const r = ref.pages[i];
     const u = uploaded.pages[i];
-    const rMargin = averageMargins(r);
-    const uMargin = averageMargins(u);
-    marginDelta += Math.abs(rMargin.left - uMargin.left) + Math.abs(rMargin.top - uMargin.top);
+    if (hasUploadedTextItems) {
+      const rMargin = averageMargins(r);
+      const uMargin = averageMargins(u);
+      marginDelta += Math.abs(rMargin.left - uMargin.left) + Math.abs(rMargin.top - uMargin.top);
+    }
     const aspectR = r.width / r.height;
     const aspectU = u.width / u.height;
     if (Math.abs(aspectR - aspectU) > 0.08) {
@@ -223,7 +243,7 @@ export function layoutScore(ref: DocumentExtract, uploaded: DocumentExtract): {
       notes.push(`Page ${i + 1} aspect ratio differs (scan/scale variation possible).`);
     }
   }
-  if (n > 0) {
+  if (hasUploadedTextItems && n > 0) {
     const avgMargin = marginDelta / n;
     if (avgMargin > 40) {
       score -= 12;
@@ -234,10 +254,12 @@ export function layoutScore(ref: DocumentExtract, uploaded: DocumentExtract): {
     }
   }
 
-  const itemDelta = Math.abs(countItems(ref) - countItems(uploaded));
-  if (itemDelta > 80) {
-    score -= 10;
-    notes.push("Text block density differs substantially from the template.");
+  if (hasUploadedTextItems) {
+    const itemDelta = Math.abs(countItems(ref) - countItems(uploaded));
+    if (itemDelta > 80) {
+      score -= 10;
+      notes.push("Text block density differs substantially from the template.");
+    }
   }
 
   return { score: Math.max(35, Math.round(score)), notes };

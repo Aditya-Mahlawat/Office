@@ -132,6 +132,7 @@ export type AcceptanceRules = {
 export type AppSettings = {
   weights: ScoreWeights;
   rules: AcceptanceRules;
+  geminiApiKey?: string;
 };
 
 export type StoreShape = {
