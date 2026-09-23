@@ -65,6 +65,15 @@ export type ReferenceDocument = {
   active: boolean;
   pageCount: number;
   sizeBytes: number;
+  /** Labels/sections inferred from this particular template, not global demo defaults. */
+  criteria?: ReferenceCriteria;
+  /** Soft-deleted versions stay available to historical verification reports. */
+  deletedAt?: string;
+};
+
+export type ReferenceCriteria = {
+  mandatoryFields: string[];
+  expectedSections: string[];
 };
 
 export type HumanReview = {

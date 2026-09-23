@@ -4,15 +4,17 @@ import { badRequest, json, readPdfUpload } from "@/lib/http";
 import { extractPdf } from "@/lib/pdf-extract";
 import { filePath } from "@/lib/paths";
 import { getStore, nextReferenceVersion, withStore } from "@/lib/store";
+import { deriveReferenceCriteria } from "@/lib/reference-criteria";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const { references } = getStore();
+  const visibleReferences = references.filter((reference) => !reference.deletedAt);
   return json({
-    references,
-    activeId: references.find((r) => r.active)?.id ?? null,
+    references: visibleReferences,
+    activeId: visibleReferences.find((r) => r.active)?.id ?? null,
   });
 }
 
@@ -22,8 +24,11 @@ export async function POST(req: NextRequest) {
   if ("error" in parsed) return badRequest(parsed.error);
 
   let pageCount = 0;
+  let criteria;
   try {
-    pageCount = (await extractPdf(parsed.buffer)).pageCount;
+    const extracted = await extractPdf(parsed.buffer);
+    pageCount = extracted.pageCount;
+    criteria = deriveReferenceCriteria(extracted.fullText);
   } catch {
     return badRequest("Could not read this PDF.");
   }
@@ -43,6 +48,7 @@ export async function POST(req: NextRequest) {
       active: true,
       pageCount,
       sizeBytes: parsed.buffer.length,
+      criteria,
     };
     store.references.push(doc);
     return doc;

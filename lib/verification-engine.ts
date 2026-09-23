@@ -20,6 +20,8 @@ import {
   stampAnalysis,
 } from "./pdf-extract";
 import type { DocumentExtract } from "./pdf-extract";
+import { applyOcrText, ocrImagePdf } from "./ocr";
+import { deriveReferenceCriteria } from "./reference-criteria";
 
 function nowIso() {
   return new Date().toISOString();
@@ -101,7 +103,8 @@ export type EngineResult = {
 export async function runVerificationEngine(input: EngineInput): Promise<EngineResult> {
   const stages = initStages();
   const issues: Issue[] = [];
-  const { rules, weights } = input.settings;
+  const { weights } = input.settings;
+  let rules = input.settings.rules;
 
   let uploaded: DocumentExtract;
   let reference: DocumentExtract;
@@ -121,6 +124,31 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
     throw err;
   }
 
+  let usedOcr = false;
+  if (!uploaded.hasSelectableText || !reference.hasSelectableText) {
+    try {
+      if (!uploaded.hasSelectableText) {
+        uploaded = applyOcrText(uploaded, await ocrImagePdf(input.uploadedBuffer));
+        usedOcr = uploaded.hasSelectableText;
+      }
+      if (!reference.hasSelectableText) {
+        reference = applyOcrText(reference, await ocrImagePdf(input.referenceBuffer));
+        usedOcr = true;
+      }
+    } catch (error) {
+      issues.push(
+        issue("warning", "text", `OCR could not complete: ${error instanceof Error ? error.message : "unknown error"}`)
+      );
+    }
+  }
+
+  const criteria = deriveReferenceCriteria(reference.fullText);
+  rules = {
+    ...rules,
+    mandatoryFields: criteria.mandatoryFields,
+    expectedSections: criteria.expectedSections,
+  };
+
   setStage(
     stages,
     "converting_pages",
@@ -128,14 +156,15 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
     "Used PDF page metrics and operator lists. Raster conversion/OCR vision model is not connected."
   );
 
-  const usedOcr = false;
   setStage(
     stages,
     "ocr_text",
     uploaded.hasSelectableText ? "completed" : "completed",
-    uploaded.hasSelectableText
-      ? "Extracted selectable PDF text (digital PDF path)."
-      : "Little selectable text found. This looks scanned. Connect an OCR adapter (Tesseract / Document AI) in lib/verification-engine.ts for handwriting and scan OCR."
+    usedOcr
+      ? "Extracted text from image-only PDF with Tesseract OCR."
+      : uploaded.hasSelectableText
+        ? "Extracted selectable PDF text (digital PDF path)."
+        : "Little selectable text found and OCR did not return usable text."
   );
 
   if (!uploaded.hasSelectableText) {
@@ -143,7 +172,7 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
       issue(
         "warning",
         "text",
-        "Uploaded file has little selectable text. Scores use layout/image proxies; scan OCR is not connected."
+        "Uploaded file has little usable text after OCR. Scores use layout/image proxies."
       )
     );
   }
@@ -180,7 +209,7 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
     stages,
     "structure",
     "completed",
-    `Detected ${upSections.length} heading/section candidates.`
+    `Detected ${upSections.length} heading/section candidates. Reference-specific checks: ${rules.expectedSections.length} section(s), ${rules.mandatoryFields.length} field(s).`
   );
 
   setStage(stages, "fields", "processing");
@@ -288,7 +317,9 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
     issues,
     engineMode: "heuristic",
     engineNote:
-      "Heuristic PDF parser (pdf.js text, layout boxes, image operators). Replace runVerificationEngine() with a production OCR/vision provider. Results are real comparisons of extracted PDF data, not a simulated pass.",
+      usedOcr
+        ? "Tesseract OCR extracted text from an image-only PDF; layout, signature, stamp, and letterhead checks remain heuristic."
+        : "Heuristic PDF parser (pdf.js text, layout boxes, image operators). Replace runVerificationEngine() with a production OCR/vision provider. Results are real comparisons of extracted PDF data, not a simulated pass.",
     extractedSummary: {
       uploadedTextPreview: uploaded.fullText.slice(0, 1200),
       referenceTextPreview: reference.fullText.slice(0, 1200),

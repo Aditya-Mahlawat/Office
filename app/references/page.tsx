@@ -55,6 +55,18 @@ export default function ReferencesPage() {
     setPreview(id);
   }
 
+  async function remove(id: string, name: string) {
+    if (!window.confirm(`Delete ${name}? It will disappear from reference management. Files used by completed history are retained so those reports stay reproducible.`)) return;
+    const res = await fetch(`/api/references/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error || "Could not delete reference.");
+      return;
+    }
+    if (preview === id) setPreview(null);
+    await load();
+  }
+
   const current = refs.find((r) => r.id === preview);
 
   return (
@@ -139,6 +151,9 @@ export default function ReferencesPage() {
                             Activate
                           </button>
                         )}
+                        <button className="btn ghost danger-link" onClick={() => remove(r.id, r.fileName)}>
+                          Delete
+                        </button>
                       </td>
                     </tr>
                   ))}

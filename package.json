@@ -9,10 +9,11 @@
   },
   "dependencies": {
     "next": "^15.5.4",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "unpdf": "^1.1.0",
-    "pdfjs-dist": "^4.10.38"
+    "tesseract.js": "^7.0.0",
+    "unpdf": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.18.6",

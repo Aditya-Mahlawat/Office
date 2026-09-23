@@ -108,6 +108,9 @@ export default function VerifyPage() {
               {active && (
                 <div className="muted small">
                   {active.pageCount} pages · uploaded {new Date(active.uploadedAt).toLocaleString()}
+                  {active.criteria && (
+                    <><br />This reference supplies {active.criteria.mandatoryFields.length} field and {active.criteria.expectedSections.length} section checks.</>
+                  )}
                 </div>
               )}
             </div>

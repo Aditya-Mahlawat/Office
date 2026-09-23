@@ -146,6 +146,7 @@ button, input, select, textarea { font: inherit; }
 .btn.danger { background: var(--bad); }
 .btn.ok { background: var(--ok); }
 .btn.ghost { background: transparent; color: var(--accent); padding-left: 0; }
+.btn.ghost.danger-link { color: var(--bad); }
 .badge {
   display: inline-flex;
   align-items: center;

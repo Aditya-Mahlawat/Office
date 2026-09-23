@@ -64,7 +64,8 @@ export function nextReferenceVersion(store: StoreShape): number {
 }
 
 export function getActiveReference(store: StoreShape): ReferenceDocument | undefined {
-  return store.references.find((r) => r.active) ?? store.references.at(-1);
+  return store.references.find((r) => r.active && !r.deletedAt) ??
+    store.references.filter((r) => !r.deletedAt).at(-1);
 }
 
 export function getSettings(): AppSettings {
