@@ -43,7 +43,7 @@ export default function SettingsPage() {
           <h2>Settings</h2>
           <p>Score weights and acceptance rules are applied by the verification engine, not hard-coded in the UI.</p>
         </div>
-        <button className="btn" onClick={save}>
+        <button className="btn" onClick={save} suppressHydrationWarning>
           Save settings
         </button>
       </div>
@@ -193,6 +193,7 @@ export default function SettingsPage() {
             <label>Google Gemini API Key (optional):</label>
             <input
               type="password"
+              suppressHydrationWarning
               placeholder="AIzaSy... (leave blank to use standalone Tesseract OCR)"
               value={settings.geminiApiKey || ""}
               onChange={(e) => setSettings({ ...settings, geminiApiKey: e.target.value.trim() })}
