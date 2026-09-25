@@ -17,7 +17,7 @@ export async function PATCH(
     const doc = store.references.find((r) => r.id === id);
     if (!doc) return null;
     if (body.active && !doc.deletedAt) {
-      for (const r of store.references) r.active = r.id === id;
+      doc.active = true;
     } else if (body.active === false) {
       doc.active = false;
     }

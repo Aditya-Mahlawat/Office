@@ -32,11 +32,12 @@ export async function POST(req: NextRequest) {
 
   const store = getStore();
   const requestedRef = String(form.get("reference_document_id") ?? "");
-  const reference =
-    store.references.find((r) => r.id === requestedRef) ?? getActiveReference(store);
+  const references = requestedRef
+    ? store.references.filter((r) => r.id === requestedRef)
+    : store.references.filter((r) => r.active && !r.deletedAt);
 
-  if (!reference) {
-    return badRequest("No active reference document. Upload a reference PDF first.");
+  if (references.length === 0) {
+    return badRequest("No active reference document. Upload and activate a reference PDF first.");
   }
 
   const userId = String(form.get("user_id") || "user-demo");
@@ -53,6 +54,28 @@ export async function POST(req: NextRequest) {
     return badRequest("Could not read the uploaded PDF.");
   }
 
+  let bestResult = null;
+  let bestScore = -1;
+  let bestReference = references[0];
+
+  for (const ref of references) {
+    try {
+      const refBuf = fs.readFileSync(filePath(ref.storedName));
+      const result = await runVerificationEngine({
+        uploadedBuffer: parsed.buffer,
+        referenceBuffer: refBuf,
+        settings: store.settings,
+      });
+      if (result.overallScore > bestScore) {
+        bestScore = result.overallScore;
+        bestResult = result;
+        bestReference = ref;
+      }
+    } catch (err) {
+      console.error(`Verification error against ${ref.id}:`, err);
+    }
+  }
+
   const pending: VerificationRecord = {
     id,
     userId,
@@ -61,9 +84,9 @@ export async function POST(req: NextRequest) {
     uploadedStoredName: storedName,
     uploadedSizeBytes: parsed.buffer.length,
     uploadedPageCount,
-    referenceId: reference.id,
-    referenceVersion: reference.version,
-    referenceFileName: reference.fileName,
+    referenceId: bestReference.id,
+    referenceVersion: bestReference.version,
+    referenceFileName: bestReference.fileName,
     createdAt: new Date().toISOString(),
     status: "processing",
     engineMode: "heuristic",
@@ -93,44 +116,36 @@ export async function POST(req: NextRequest) {
       usedOcr: false,
     },
   };
-  saveVerification(pending);
 
-  try {
-    const refBuf = fs.readFileSync(filePath(reference.storedName));
-    const result = await runVerificationEngine({
-      uploadedBuffer: parsed.buffer,
-      referenceBuffer: refBuf,
-      settings: store.settings,
-    });
-
-    const status =
-      result.automatedDecision === "MANUAL_REVIEW" ? "manual_review" : "completed";
-
-    const completed: VerificationRecord = {
-      ...pending,
-      ...result,
-      status,
-      finalDecision:
-        result.automatedDecision === "MANUAL_REVIEW" ? "PENDING" : result.automatedDecision,
-      completedAt: new Date().toISOString(),
-    };
-    saveVerification(completed);
-
-    return json({
-      verification_id: completed.id,
-      match_percentage: completed.overallScore,
-      automated_decision: completed.automatedDecision,
-      final_decision: completed.finalDecision,
-      critical_issues: completed.issues.filter((i) => i.severity === "critical").map((i) => i.message),
-      warnings: completed.issues.filter((i) => i.severity === "warning").map((i) => i.message),
-      verification: completed,
-    });
-  } catch (err) {
+  if (!bestResult) {
     pending.status = "failed";
     pending.stages = pending.stages.map((s) =>
-      s.status === "processing" ? { ...s, status: "failed", detail: String(err) } : s
+      s.status === "processing" ? { ...s, status: "failed", detail: "Verification engine failed against all references" } : s
     );
     saveVerification(pending);
-    return json({ error: "Verification engine failed", detail: String(err), verification: pending }, 500);
+    return json({ error: "Verification engine failed against all references", verification: pending }, 500);
   }
+
+  const status =
+    bestResult.automatedDecision === "MANUAL_REVIEW" ? "manual_review" : "completed";
+
+  const completed: VerificationRecord = {
+    ...pending,
+    ...bestResult,
+    status,
+    finalDecision:
+      bestResult.automatedDecision === "MANUAL_REVIEW" ? "PENDING" : bestResult.automatedDecision,
+    completedAt: new Date().toISOString(),
+  };
+  saveVerification(completed);
+
+  return json({
+    verification_id: completed.id,
+    match_percentage: completed.overallScore,
+    automated_decision: completed.automatedDecision,
+    final_decision: completed.finalDecision,
+    critical_issues: completed.issues.filter((i) => i.severity === "critical").map((i) => i.message),
+    warnings: completed.issues.filter((i) => i.severity === "warning").map((i) => i.message),
+    verification: completed,
+  });
 }
