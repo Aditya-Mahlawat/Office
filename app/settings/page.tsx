@@ -28,19 +28,6 @@ export default function SettingsPage() {
     setMsg("Settings saved. New verifications use these weights and rules.");
   }
 
-  async function removeApiKey() {
-    setMsg("");
-    const updated = { ...settings, geminiApiKey: "" };
-    const res = await fetch("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updated),
-    });
-    const data = await res.json();
-    setSettings(data.settings);
-    setMsg("API key removed and settings saved.");
-  }
-
   function setWeight(key: keyof typeof w, value: number) {
     setSettings({ ...settings, weights: { ...w, [key]: value } });
   }
@@ -192,39 +179,6 @@ export default function SettingsPage() {
                 }
               />
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="card-h">Vision & OCR Provider</div>
-        <div className="card-b small">
-          <p>
-            When a scanned document (image-only PDF) is uploaded, the verification engine uses OCR to extract text, fields, and letterhead structure.
-          </p>
-          <div className="field" style={{ marginTop: 12 }}>
-            <label>Google Gemini API Key (optional):</label>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                type="password"
-                suppressHydrationWarning
-                placeholder="AIzaSy... (leave blank to use standalone Tesseract OCR)"
-                value={settings.geminiApiKey || ""}
-                onChange={(e) => setSettings({ ...settings, geminiApiKey: e.target.value.trim() })}
-                style={{ width: "100%", maxWidth: 450 }}
-              />
-              <button className="btn" onClick={save} suppressHydrationWarning>Save Key</button>
-              {settings.geminiApiKey && (
-                <button className="btn ghost danger-link" onClick={removeApiKey} suppressHydrationWarning>
-                  Remove Key
-                </button>
-              )}
-            </div>
-            <p className="muted" style={{ marginTop: 6 }}>
-              {settings.geminiApiKey
-                ? "✓ Gemini Multimodal Vision API is configured for cloud-powered document understanding."
-                : "ℹ No API key configured. Standalone local Tesseract + Sharp OCR engine is active (100% offline)."}
-            </p>
           </div>
         </div>
       </div>

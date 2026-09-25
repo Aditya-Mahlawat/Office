@@ -125,17 +125,17 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
   }
 
   let usedOcr = false;
-  let ocrProvider: "gemini" | "tesseract" | undefined;
+  let ocrProvider: "tesseract" | undefined;
   if (!uploaded.hasSelectableText || !reference.hasSelectableText) {
     try {
       if (!uploaded.hasSelectableText) {
-        const ocr = await ocrImagePdf(input.uploadedBuffer, input.settings.geminiApiKey);
+        const ocr = await ocrImagePdf(input.uploadedBuffer);
         uploaded = applyOcrText(uploaded, ocr.texts);
         usedOcr = uploaded.hasSelectableText;
         ocrProvider = ocr.provider;
       }
       if (!reference.hasSelectableText) {
-        const ocr = await ocrImagePdf(input.referenceBuffer, input.settings.geminiApiKey);
+        const ocr = await ocrImagePdf(input.referenceBuffer);
         reference = applyOcrText(reference, ocr.texts);
         usedOcr = true;
         ocrProvider = ocr.provider;
@@ -166,9 +166,7 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
     "ocr_text",
     uploaded.hasSelectableText ? "completed" : "completed",
     usedOcr
-      ? ocrProvider === "gemini"
-        ? "Extracted text with Gemini Multimodal Vision API."
-        : "Extracted text standalone from image-only PDF with Tesseract OCR."
+      ? "Extracted text standalone from image-only PDF with Tesseract OCR."
       : uploaded.hasSelectableText
         ? "Extracted selectable PDF text (digital PDF path)."
         : "Little selectable text found and OCR did not return usable text."
@@ -325,9 +323,7 @@ export async function runVerificationEngine(input: EngineInput): Promise<EngineR
     engineMode: usedOcr ? "ocr_hybrid" : "heuristic",
     engineNote:
       usedOcr
-        ? ocrProvider === "gemini"
-          ? "Gemini Multimodal Vision API extracted text from the document; layout, signature, stamp, and letterhead verification applied."
-          : "Standalone Tesseract OCR extracted text from an image-only PDF; layout, signature, stamp, and letterhead checks applied."
+        ? "Standalone Tesseract OCR extracted text from an image-only PDF; layout, signature, stamp, and letterhead checks applied."
         : "Heuristic PDF parser (pdf.js text, layout boxes, image operators). Results are real comparisons of extracted PDF data, not a canned pass.",
     extractedSummary: {
       uploadedTextPreview: uploaded.fullText.slice(0, 1200),

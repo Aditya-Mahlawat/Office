@@ -5,30 +5,7 @@ import { createWorker } from "tesseract.js";
 import { DATA_DIR, ensureDataDirs } from "./paths";
 import type { DocumentExtract } from "./pdf-extract";
 
-async function tryGeminiOcr(buffer: Buffer, apiKey: string): Promise<string[] | null> {
-  try {
-    const { GoogleGenAI } = await import("@google/genai");
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: [
-        {
-          inlineData: {
-            mimeType: "application/pdf",
-            data: buffer.toString("base64"),
-          },
-        },
-        "Extract all text from this document verbatim. Preserve the complete text structure, including all headings, institute details, applicant information, tables, and signature blocks. Return only the extracted text.",
-      ],
-    });
-    const text = response.text?.trim();
-    if (text) return [text];
-    return null;
-  } catch (err) {
-    console.warn("Gemini OCR failed or unavailable, falling back to standalone Tesseract OCR:", err);
-    return null;
-  }
-}
+
 
 async function runStandaloneTesseract(buffer: Buffer): Promise<string[]> {
   ensureDataDirs();
@@ -87,16 +64,8 @@ async function runStandaloneTesseract(buffer: Buffer): Promise<string[]> {
   }
 }
 
-/** OCR image-only PDF pages with Gemini if API key is set, falling back to standalone Tesseract. */
-export async function ocrImagePdf(buffer: Buffer, apiKey?: string): Promise<{ texts: string[]; provider: "gemini" | "tesseract" }> {
-  const key = apiKey || process.env.GEMINI_API_KEY;
-  if (key) {
-    const geminiTexts = await tryGeminiOcr(buffer, key);
-    if (geminiTexts && geminiTexts.length > 0) {
-      return { texts: geminiTexts, provider: "gemini" };
-    }
-  }
-
+/** OCR image-only PDF pages using standalone Tesseract. */
+export async function ocrImagePdf(buffer: Buffer): Promise<{ texts: string[]; provider: "tesseract" }> {
   const texts = await runStandaloneTesseract(buffer);
   return { texts, provider: "tesseract" };
 }

@@ -87,16 +87,16 @@ export default function VerifyPage() {
             <div className="row" style={{ marginTop: 16 }}>
               <div className="field" style={{ flex: 1 }}>
                 <label>User ID</label>
-                <input value={userId} onChange={(e) => setUserId(e.target.value)} />
+                <input suppressHydrationWarning value={userId} onChange={(e) => setUserId(e.target.value)} />
               </div>
               <div className="field" style={{ flex: 1 }}>
                 <label>User name</label>
-                <input value={userName} onChange={(e) => setUserName(e.target.value)} />
+                <input suppressHydrationWarning value={userName} onChange={(e) => setUserName(e.target.value)} />
               </div>
             </div>
             <div className="field">
               <label>Reference document (simulates per-registration template)</label>
-              <select value={refId} onChange={(e) => setRefId(e.target.value)}>
+              <select suppressHydrationWarning value={refId} onChange={(e) => setRefId(e.target.value)}>
                 {refs.length === 0 && <option value="">No references uploaded</option>}
                 {refs.length > 0 && <option value="">Auto (Detect best match from active templates)</option>}
                 {refs.map((r) => (
@@ -116,7 +116,7 @@ export default function VerifyPage() {
               )}
             </div>
             {error && <div className="error">{error}</div>}
-            <button className="btn" disabled={busy} onClick={submit}>
+            <button suppressHydrationWarning className="btn" disabled={busy} onClick={submit}>
               {busy ? "Processing…" : "Start verification"}
             </button>
           </div>

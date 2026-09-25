@@ -21,7 +21,6 @@ export async function PUT(req: NextRequest) {
         mandatoryFields: body.rules?.mandatoryFields ?? store.settings.rules.mandatoryFields,
         expectedSections: body.rules?.expectedSections ?? store.settings.rules.expectedSections,
       },
-      geminiApiKey: body.geminiApiKey,
     };
     const sum = Object.values(store.settings.weights).reduce((a, b) => a + b, 0);
     if (sum <= 0) store.settings.weights = { ...DEFAULT_SETTINGS.weights };
