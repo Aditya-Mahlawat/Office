@@ -28,6 +28,19 @@ export default function SettingsPage() {
     setMsg("Settings saved. New verifications use these weights and rules.");
   }
 
+  async function removeApiKey() {
+    setMsg("");
+    const updated = { ...settings, geminiApiKey: "" };
+    const res = await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updated),
+    });
+    const data = await res.json();
+    setSettings(data.settings);
+    setMsg("API key removed and settings saved.");
+  }
+
   function setWeight(key: keyof typeof w, value: number) {
     setSettings({ ...settings, weights: { ...w, [key]: value } });
   }
@@ -191,14 +204,22 @@ export default function SettingsPage() {
           </p>
           <div className="field" style={{ marginTop: 12 }}>
             <label>Google Gemini API Key (optional):</label>
-            <input
-              type="password"
-              suppressHydrationWarning
-              placeholder="AIzaSy... (leave blank to use standalone Tesseract OCR)"
-              value={settings.geminiApiKey || ""}
-              onChange={(e) => setSettings({ ...settings, geminiApiKey: e.target.value.trim() })}
-              style={{ width: "100%", maxWidth: 450 }}
-            />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="password"
+                suppressHydrationWarning
+                placeholder="AIzaSy... (leave blank to use standalone Tesseract OCR)"
+                value={settings.geminiApiKey || ""}
+                onChange={(e) => setSettings({ ...settings, geminiApiKey: e.target.value.trim() })}
+                style={{ width: "100%", maxWidth: 450 }}
+              />
+              <button className="btn" onClick={save}>Save Key</button>
+              {settings.geminiApiKey && (
+                <button className="btn ghost danger-link" onClick={removeApiKey}>
+                  Remove Key
+                </button>
+              )}
+            </div>
             <p className="muted" style={{ marginTop: 6 }}>
               {settings.geminiApiKey
                 ? "✓ Gemini Multimodal Vision API is configured for cloud-powered document understanding."
