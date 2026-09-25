@@ -12,7 +12,7 @@ async function runStandaloneTesseract(buffer: Buffer): Promise<string[]> {
   const doc = await getDocumentProxy(new Uint8Array(buffer));
   const workerScript = path.resolve(process.cwd(), "node_modules/tesseract.js/src/worker-script/node/index.js");
   const worker = await createWorker("eng", 1, {
-    cachePath: path.join(DATA_DIR, "ocr-cache"),
+    langPath: DATA_DIR,
     workerPath: workerScript,
   });
   await worker.setParameters({
