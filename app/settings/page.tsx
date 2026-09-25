@@ -213,9 +213,9 @@ export default function SettingsPage() {
                 onChange={(e) => setSettings({ ...settings, geminiApiKey: e.target.value.trim() })}
                 style={{ width: "100%", maxWidth: 450 }}
               />
-              <button className="btn" onClick={save}>Save Key</button>
+              <button className="btn" onClick={save} suppressHydrationWarning>Save Key</button>
               {settings.geminiApiKey && (
-                <button className="btn ghost danger-link" onClick={removeApiKey}>
+                <button className="btn ghost danger-link" onClick={removeApiKey} suppressHydrationWarning>
                   Remove Key
                 </button>
               )}
