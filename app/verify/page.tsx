@@ -25,7 +25,7 @@ export default function VerifyPage() {
       .then((r) => r.json())
       .then((d) => {
         setRefs(d.references || []);
-        if (d.activeId) setRefId(d.activeId);
+        setRefId("");
       });
   }, []);
 
@@ -98,6 +98,7 @@ export default function VerifyPage() {
               <label>Reference document (simulates per-registration template)</label>
               <select value={refId} onChange={(e) => setRefId(e.target.value)}>
                 {refs.length === 0 && <option value="">No references uploaded</option>}
+                {refs.length > 0 && <option value="">Auto (Detect best match from active templates)</option>}
                 {refs.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.id} v{r.version} — {r.fileName}
